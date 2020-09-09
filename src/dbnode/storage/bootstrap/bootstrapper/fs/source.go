@@ -69,13 +69,6 @@ type newDataFileSetReaderFn func(
 	opts fs.Options,
 ) (fs.DataFileSetReader, error)
 
-type readIndexInfoFilesFn func(
-	filePathPrefix string,
-	namespace ident.ID,
-	readerBufferSize int,
-	fileSetType persist.FileSetType,
-) []fs.ReadIndexInfoFileResult
-
 type fileSystemSource struct {
 	opts                 Options
 	fsopts               fs.Options
@@ -87,7 +80,7 @@ type fileSystemSource struct {
 	persistManager       *bootstrapper.SharedPersistManager
 	compactor            *bootstrapper.SharedCompactor
 	metrics              fileSystemSourceMetrics
-	readIndexInfoFilesFn readIndexInfoFilesFn
+	readIndexInfoFilesFn fs.ReadIndexInfoFilesFn
 }
 
 type fileSystemSourceMetrics struct {
@@ -789,12 +782,18 @@ func (s *fileSystemSource) read(
 		)
 	}
 	if run == bootstrapIndexRunType {
+		infoFiles := s.readIndexInfoFilesFn(s.fsopts.FilePathPrefix(), md.ID(),
+			s.fsopts.InfoReaderBufferSize(), persist.FileSetSnapshotType)
+
 		logSpan("bootstrap_from_index_persisted_blocks_start")
 		// NB(r): First read all the FSTs and add to runResult index results,
 		// subtract the shard + time ranges from what we intend to bootstrap
 		// for those we found.
-		r, err := s.bootstrapFromIndexPersistedBlocks(md,
-			shardTimeRanges)
+		r, err := s.bootstrapFromIndexPersistedBlocks(
+			md,
+			shardTimeRanges,
+			infoFiles,
+		)
 		if err != nil {
 			s.log.Warn("filesystem bootstrapped failed to read persisted index blocks")
 		} else {
@@ -810,8 +809,11 @@ func (s *fileSystemSource) read(
 		// NB(bodu): We don't actually bootstrap snapshot data in the fs bootstrapper
 		// (we do this in the commitlog bootstrapper) but we do want to subtract the shard time
 		// ranges fulfilled by index snapshots.
-		r, err = s.bootstrapFromIndexSnapshots(md,
-			shardTimeRanges)
+		r, err = s.bootstrapFromIndexSnapshots(
+			md,
+			shardTimeRanges,
+			infoFiles,
+		)
 		if err != nil {
 			s.log.Warn("filesystem bootstrapped failed to read index snapshots")
 		} else {
@@ -908,14 +910,13 @@ type bootstrapFromIndexResult struct {
 func (s *fileSystemSource) bootstrapFromIndexPersistedBlocks(
 	ns namespace.Metadata,
 	shardTimeRanges result.ShardTimeRanges,
+	infoFiles []fs.ReadIndexInfoFileResult,
 ) (bootstrapFromIndexResult, error) {
 	res := bootstrapFromIndexResult{
 		fulfilled: result.NewShardTimeRanges(),
 	}
 
 	indexBlockSize := ns.Options().IndexOptions().BlockSize()
-	infoFiles := s.readIndexInfoFilesFn(s.fsopts.FilePathPrefix(), ns.ID(),
-		s.fsopts.InfoReaderBufferSize(), persist.FileSetFlushType)
 
 	for _, infoFile := range infoFiles {
 		if err := infoFile.Err.Error(); err != nil {
@@ -1010,6 +1011,7 @@ func (s *fileSystemSource) bootstrapFromIndexPersistedBlocks(
 func (s *fileSystemSource) bootstrapFromIndexSnapshots(
 	ns namespace.Metadata,
 	shardTimeRanges result.ShardTimeRanges,
+	infoFiles []fs.ReadIndexInfoFileResult,
 ) (bootstrapFromIndexResult, error) {
 	res := bootstrapFromIndexResult{
 		fulfilled: result.NewShardTimeRanges(),
@@ -1017,9 +1019,6 @@ func (s *fileSystemSource) bootstrapFromIndexSnapshots(
 	}
 
 	indexBlockSize := ns.Options().IndexOptions().BlockSize()
-	infoFiles := s.readIndexInfoFilesFn(s.fsopts.FilePathPrefix(), ns.ID(),
-		s.fsopts.InfoReaderBufferSize(), persist.FileSetSnapshotType)
-
 	for _, infoFile := range infoFiles {
 		if err := infoFile.Err.Error(); err != nil {
 			s.log.Error("unable to read index snapshot info file",

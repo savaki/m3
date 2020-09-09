@@ -123,7 +123,7 @@ type DataFileSetReaderStatus struct {
 // DataReaderOpenOptions is options struct for the reader open method.
 type DataReaderOpenOptions struct {
 	// Identifier allows to identify a FileSetFile.
-	Identifier  FileSetFileIdentifier
+	Identifier FileSetFileIdentifier
 	// FileSetType is the file set type.
 	FileSetType persist.FileSetType
 	// StreamingEnabled enables using streaming methods, such as DataFileSetReader.StreamingRead.
@@ -680,3 +680,11 @@ type CrossBlockIterator interface {
 	// Reset resets the iterator to the given block records.
 	Reset(records []BlockRecord)
 }
+
+// ReadIndexInfoFilesFn reads in index info files given a namespace.
+type ReadIndexInfoFilesFn func(
+	filePathPrefix string,
+	namespace ident.ID,
+	readerBufferSize int,
+	fileSetType persist.FileSetType,
+) []ReadIndexInfoFileResult
