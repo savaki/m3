@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/m3db/m3/src/dbnode/persist"
+	"github.com/m3db/m3/src/dbnode/persist/fs"
 	"github.com/m3db/m3/src/dbnode/sharding"
 	"github.com/m3db/m3/src/dbnode/storage/bootstrap/result"
 	"github.com/m3db/m3/src/dbnode/storage/index"
@@ -85,8 +86,8 @@ func (r readOnlyIndexProxy) Tick(c context.Cancellable, startTime time.Time) (na
 	return namespaceIndexTickResult{}, nil
 }
 
-func (r readOnlyIndexProxy) WarmFlush(flush persist.IndexFlush, shards []databaseShard) error {
-	return nil
+func (r readOnlyIndexProxy) WarmFlush(flush persist.IndexFlush, shards []databaseShard) ([]time.Time, error) {
+	return nil, nil
 }
 
 func (r readOnlyIndexProxy) ColdFlush(shards []databaseShard) (OnColdFlushDone, error) {
@@ -99,6 +100,22 @@ func (r readOnlyIndexProxy) SetExtendedRetentionPeriod(period time.Duration) {
 
 func (r readOnlyIndexProxy) DebugMemorySegments(opts DebugMemorySegmentsOptions) error {
 	return r.underlying.DebugMemorySegments(opts)
+}
+
+func (r readOnlyIndexProxy) BlockStatesSnapshot() index.BlockStateSnapshot {
+	return index.NewBlockStateSnapshot(false, index.BootstrappedBlockStateSnapshot{})
+}
+
+func (r readOnlyIndexProxy) SetSnapshotStateVersionFlushed(blockStart time.Time, version int) {}
+
+func (r readOnlyIndexProxy) Snapshot(
+	shards map[uint32]struct{},
+	blockStart,
+	snapshotTime time.Time,
+	snapshotPersist persist.SnapshotPreparer,
+	infoFiles []fs.ReadIndexInfoFileResult,
+) error {
+	return nil
 }
 
 func (r readOnlyIndexProxy) Close() error {
