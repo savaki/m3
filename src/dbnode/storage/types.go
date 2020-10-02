@@ -563,7 +563,7 @@ type databaseShard interface {
 		onFlush persist.OnFlushSeries,
 	) (ShardColdFlush, error)
 
-	// Snapshot snapshot's the unflushed WarmWrites in this shard.
+	// Snapshot snapshots the unflushed WarmWrites in this shard.
 	Snapshot(
 		blockStart time.Time,
 		snapshotStart time.Time,
@@ -712,7 +712,7 @@ type NamespaceIndex interface {
 	// DebugMemorySegments allows for debugging memory segments.
 	DebugMemorySegments(opts DebugMemorySegmentsOptions) error
 
-	// Snapshot in-memory state to disk for faster bootstrapping.
+	// Snapshot in-memory index data to disk for faster bootstrapping.
 	Snapshot(
 		shards map[uint32]struct{},
 		blockStart,
@@ -1304,9 +1304,9 @@ type newFSMergeWithMemFn func(
 // AggregateTilesOptions is the options for large tile aggregation.
 type AggregateTilesOptions struct {
 	// Start and End specify the aggregation window.
-	Start, End          time.Time
+	Start, End time.Time
 	// Step is the downsampling step.
-	Step                time.Duration
+	Step time.Duration
 	// HandleCounterResets is temporarily used to force counter reset handling logics on the processed series.
 	// TODO: remove once we have metrics type stored in the metadata.
 	HandleCounterResets bool
@@ -1318,4 +1318,4 @@ type NamespaceHooks interface {
 	OnCreatedNamespace(Namespace, GetNamespaceFn) error
 }
 
-type GetNamespaceFn func (k ident.ID) (databaseNamespace, bool)
+type GetNamespaceFn func(k ident.ID) (databaseNamespace, bool)
