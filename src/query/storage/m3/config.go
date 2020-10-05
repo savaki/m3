@@ -167,11 +167,13 @@ type ClustersStaticConfigurationOptions struct {
 	CustomAdminOptions []client.CustomAdminOption
 }
 
-// NewClusters instantiates a new Clusters instance.
-func (c ClustersStaticConfiguration) NewClusters(
+// NewStaticClusters instantiates a new Clusters instance based on
+// static configuration.
+func (c ClustersStaticConfiguration) NewStaticClusters(
 	instrumentOpts instrument.Options,
 	opts ClustersStaticConfigurationOptions,
 ) (Clusters, error) {
+
 	var (
 		numUnaggregatedClusterNamespaces int
 		numAggregatedClusterNamespaces   int
@@ -312,4 +314,46 @@ func (c ClustersStaticConfiguration) NewClusters(
 
 	return NewClusters(unaggregatedClusterNamespace,
 		aggregatedClusterNamespaces...)
+}
+
+// NewDynamicClusters instantiates a new Clusters instance that pulls
+// cluster information from etcd.
+func (c ClustersStaticConfiguration) NewDynamicClusters(
+	instrumentOpts instrument.Options,
+	opts ClustersStaticConfigurationOptions,
+) (Clusters, error) {
+	clients := make([]client.Client, 0, len(c))
+	for _, clusterCfg := range c {
+		result, err := clusterCfg.newClient(client.ConfigurationParameters{
+			InstrumentOptions: instrumentOpts,
+		}, opts.CustomAdminOptions...)
+		if err != nil {
+			return nil, err
+		}
+
+		clients = append(clients, result)
+	}
+
+	var (
+		cfgs = make([]ClusterDynamicConfiguration, len(clients))
+		wg   sync.WaitGroup
+	)
+	for i, cfg := range cfgs {
+		cfg := cfg
+		clnt := clients[i]
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			cfg.session = m3db.NewAsyncSession(func() (client.Client, error) {
+				return clnt, nil
+			}, nil)
+			cfg.nsInitializer = clnt.Options().NamespaceInitializer()
+		}()
+	}
+
+	dcOpts := NewDynamicClusterOptions().
+		SetClusterDynamicConfiguration(cfgs).
+		SetInstrumentOptions(instrumentOpts)
+
+	return NewDynamicClusters(dcOpts)
 }
